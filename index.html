@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>My Tasks</title>
+  <meta name="description" content="Office and personal to-do list">
+  <meta name="theme-color" content="#4f46e5">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="My Tasks">
+  <link rel="stylesheet" href="/css/styles.css">
+  <script type="module" src="/js/app.js"></script>
+</head>
+<body>
+  <!-- Shown when js/config.js still has placeholder values -->
+  <section id="setup-screen" class="center-screen" hidden>
+    <div class="card">
+      <h1>Almost there</h1>
+      <p>Add your Supabase project URL and anon key to <code>js/config.js</code>, then reload. See <code>README.md</code> for step-by-step setup.</p>
+    </div>
+  </section>
+
+  <!-- Login / sign up -->
+  <section id="auth-screen" class="center-screen" hidden>
+    <form id="auth-form" class="card auth-card">
+      <img src="/icons/icon-192.png" alt="" class="auth-logo" width="56" height="56">
+      <h1 id="auth-title">Sign in</h1>
+      <p class="muted">Office and personal tasks, synced across your devices.</p>
+      <label>Email
+        <input type="email" name="email" autocomplete="email" required>
+      </label>
+      <label>Password
+        <input type="password" name="password" autocomplete="current-password" minlength="6" required>
+      </label>
+      <button type="submit" class="btn primary" id="auth-submit">Sign in</button>
+      <p id="auth-message" class="form-message" role="status"></p>
+      <div class="auth-links">
+        <button type="button" class="link" id="auth-toggle">Create an account</button>
+        <button type="button" class="link" id="auth-forgot">Forgot password?</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Main app -->
+  <div id="app" class="layout" hidden>
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="/icons/icon-192.png" alt="" width="32" height="32">
+        <span>My Tasks</span>
+      </div>
+
+      <nav class="views" aria-label="Views">
+        <button class="view-btn" data-view="today"><span class="ico">☀️</span><span>Today</span><span class="count" data-count="today"></span></button>
+        <button class="view-btn" data-view="upcoming"><span class="ico">📅</span><span>Upcoming</span><span class="count" data-count="upcoming"></span></button>
+        <button class="view-btn" data-view="all"><span class="ico">📋</span><span>All tasks</span><span class="count" data-count="all"></span></button>
+        <button class="view-btn" data-view="done"><span class="ico">✅</span><span>Completed</span></button>
+      </nav>
+
+      <div class="sidebar-section">
+        <div class="sidebar-heading">
+          <span>Categories</span>
+          <button class="icon-btn small" id="manage-categories" title="Manage categories" aria-label="Manage categories">⚙️</button>
+        </div>
+        <ul id="category-list" class="category-list"></ul>
+      </div>
+
+      <div class="sidebar-footer">
+        <span id="user-email" class="muted small"></span>
+        <button class="link" id="sign-out">Sign out</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-row">
+          <h1 id="view-title">Today</h1>
+          <span id="sync-status" class="sync-status" title="Sync status"></span>
+          <button class="icon-btn mobile-only" id="mobile-menu" aria-label="Categories and account">☰</button>
+        </div>
+        <div class="segmented" role="tablist" aria-label="Workspace">
+          <button role="tab" data-ws="all">All</button>
+          <button role="tab" data-ws="office">💼 Office</button>
+          <button role="tab" data-ws="personal">🏠 Personal</button>
+        </div>
+        <div class="filters">
+          <input type="search" id="search" placeholder="Search tasks…" aria-label="Search tasks">
+          <select id="sort" aria-label="Sort tasks">
+            <option value="due">Sort: Due date</option>
+            <option value="priority">Sort: Priority</option>
+            <option value="created">Sort: Newest</option>
+          </select>
+        </div>
+        <div id="active-filter" class="active-filter" hidden></div>
+      </header>
+
+      <div id="task-container" class="task-container"></div>
+    </main>
+
+    <button class="fab" id="add-task" aria-label="Add task">＋</button>
+  </div>
+
+  <!-- Add / edit task -->
+  <dialog id="task-dialog" class="sheet">
+    <form id="task-form" method="dialog">
+      <header class="sheet-header">
+        <h2 id="task-dialog-title">New task</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">✕</button>
+      </header>
+      <label>Title
+        <input name="title" required maxlength="200" placeholder="What needs to be done?">
+      </label>
+      <label>Notes
+        <textarea name="notes" rows="3" placeholder="Details (optional)"></textarea>
+      </label>
+      <fieldset class="ws-choice">
+        <legend>Workspace</legend>
+        <label class="pill"><input type="radio" name="workspace" value="office" checked> 💼 Office</label>
+        <label class="pill"><input type="radio" name="workspace" value="personal"> 🏠 Personal</label>
+      </fieldset>
+      <div class="grid-2">
+        <label>Category
+          <select name="category_id"></select>
+        </label>
+        <label>Priority
+          <select name="priority">
+            <option value="high">🔴 High</option>
+            <option value="medium" selected>🟡 Medium</option>
+            <option value="low">🟢 Low</option>
+          </select>
+        </label>
+        <label>Due date
+          <input type="date" name="due_date">
+        </label>
+        <label>Time
+          <input type="time" name="due_time">
+        </label>
+        <label>Status
+          <select name="status">
+            <option value="todo">To do</option>
+            <option value="in_progress">In progress</option>
+            <option value="done">Done</option>
+          </select>
+        </label>
+      </div>
+      <footer class="sheet-footer">
+        <button type="button" class="btn danger" id="delete-task" hidden>Delete</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- Manage categories -->
+  <dialog id="category-dialog" class="sheet">
+    <div class="sheet-body">
+      <header class="sheet-header">
+        <h2>Categories</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">✕</button>
+      </header>
+      <div id="category-manager"></div>
+      <form id="category-form" class="category-form">
+        <select name="workspace" aria-label="Workspace">
+          <option value="office">💼 Office</option>
+          <option value="personal">🏠 Personal</option>
+        </select>
+        <input name="name" required maxlength="50" placeholder="New category" aria-label="Category name">
+        <input type="color" name="color" value="#6366f1" aria-label="Color">
+        <button class="btn primary" type="submit">Add</button>
+      </form>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
