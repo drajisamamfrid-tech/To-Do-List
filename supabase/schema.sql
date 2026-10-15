@@ -23,6 +23,7 @@ create table if not exists public.tasks (
   status       text not null default 'todo' check (status in ('todo', 'in_progress', 'done')),
   due_date     date,
   due_time     time,
+  repeat       text not null default 'none' check (repeat in ('none', 'daily', 'weekly', 'monthly')),
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
   completed_at timestamptz
@@ -66,3 +67,7 @@ begin
   alter publication supabase_realtime add table public.tasks, public.categories;
 exception when duplicate_object then null;
 end $$;
+
+-- Upgrade for databases created before recurring tasks existed
+alter table public.tasks add column if not exists repeat text not null default 'none'
+  check (repeat in ('none', 'daily', 'weekly', 'monthly'));

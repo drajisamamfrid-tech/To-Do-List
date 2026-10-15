@@ -16,6 +16,7 @@ const DEFAULT_CATEGORIES = [
 const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
 const WS_LABEL = { office: '💼 Office', personal: '🏠 Personal' };
 const VIEW_TITLE = { today: 'Today', upcoming: 'Upcoming', all: 'All tasks', done: 'Completed' };
+const REPEAT_LABEL = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' };
 
 const state = {
   user: null,
@@ -50,6 +51,15 @@ function todayStr() { return toDateStr(new Date()); }
 function addDays(dateStr, n) {
   const [y, m, d] = dateStr.split('-').map(Number);
   return toDateStr(new Date(y, m - 1, d + n));
+}
+function addMonths(dateStr, n) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  // Clamp to the last day of the target month (Jan 31 -> Feb 28)
+  const last = new Date(y, m - 1 + n + 1, 0).getDate();
+  return toDateStr(new Date(y, m - 1 + n, Math.min(d, last)));
+}
+function nextRepeatDate(dateStr, repeat) {
+  return repeat === 'monthly' ? addMonths(dateStr, 1) : addDays(dateStr, repeat === 'weekly' ? 7 : 1);
 }
 function formatDate(dateStr) {
   const today = todayStr();
@@ -404,6 +414,7 @@ function taskHTML(t) {
     const time = t.due_time ? ' · ' + formatTime(t.due_time) : '';
     meta.push(`<span class="chip ${cls}">📅 ${esc(formatDate(t.due_date) + time)}</span>`);
   }
+  if (REPEAT_LABEL[t.repeat]) meta.push(`<span class="chip">🔁 ${REPEAT_LABEL[t.repeat]}</span>`);
   if (t.status === 'in_progress') meta.push('<span class="chip progress">In progress</span>');
   if (t.priority === 'high') meta.push('<span class="chip overdue">High</span>');
 
@@ -448,7 +459,40 @@ async function toggleDone(id) {
   }
   upsertLocal('tasks', data);
   saveCache();
-  if (status === 'done') toast('Task completed 🎉');
+  if (status === 'done') {
+    const next = await createNextOccurrence(data);
+    toast(next ? `Task completed 🎉 Next one: ${formatDate(next.due_date)}` : 'Task completed 🎉');
+  }
+}
+
+// When a repeating task is completed, add its next copy (once).
+async function createNextOccurrence(task) {
+  if (!REPEAT_LABEL[task.repeat]) return null;
+  const today = todayStr();
+  let due = nextRepeatDate(task.due_date || today, task.repeat);
+  // Completed late: skip missed occurrences so the next one isn't already overdue
+  while (due < today) due = nextRepeatDate(due, task.repeat);
+
+  // Ticking done -> undone -> done must not create a second copy
+  const exists = state.tasks.some(t => t.id !== task.id && t.status !== 'done' &&
+    t.title === task.title && t.workspace === task.workspace && t.repeat === task.repeat && t.due_date === due);
+  if (exists) return null;
+
+  const { data, error } = await supabase.from('tasks').insert({
+    title: task.title,
+    notes: task.notes,
+    workspace: task.workspace,
+    category_id: task.category_id,
+    priority: task.priority,
+    repeat: task.repeat,
+    due_date: due,
+    due_time: task.due_time,
+  }).select().single();
+  if (error) { toast('Could not create next repeat: ' + error.message); return null; }
+  upsertLocal('tasks', data);
+  saveCache();
+  render();
+  return data;
 }
 
 function fillCategoryOptions(workspace, selected) {
@@ -474,6 +518,7 @@ function openTaskDialog(task = null) {
   fillCategoryOptions(workspace, task ? task.category_id : defaultCat?.id);
   form.priority.value = task?.priority ?? 'medium';
   form.status.value = task?.status ?? 'todo';
+  form.repeat.value = task?.repeat ?? 'none';
   form.due_date.value = task ? (task.due_date ?? '') : (state.view === 'today' ? todayStr() : '');
   form.due_time.value = task?.due_time?.slice(0, 5) ?? '';
 
@@ -494,8 +539,10 @@ async function onTaskSubmit(e) {
     status: form.status.value,
     due_date: form.due_date.value || null,
     due_time: form.due_time.value || null,
+    repeat: form.repeat.value,
   };
   if (!payload.title) return;
+  const wasDone = state.tasks.find(t => t.id === state.editingId)?.status === 'done';
 
   const submit = form.querySelector('[type=submit]');
   submit.disabled = true;
@@ -511,6 +558,7 @@ async function onTaskSubmit(e) {
   render();
   $('#task-dialog').close();
   toast(state.editingId ? 'Task updated' : 'Task added');
+  if (data.status === 'done' && !wasDone) await createNextOccurrence(data);
 }
 
 async function onDeleteTask() {

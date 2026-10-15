@@ -1,6 +1,6 @@
 // Service worker: caches the app shell so the app opens instantly and works offline.
 // Bump CACHE_VERSION whenever you deploy changes to force phones to pick them up.
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE = `todo-${CACHE_VERSION}`;
 const SHELL = [
   '/',
