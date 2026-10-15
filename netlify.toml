@@ -1,5 +1,6 @@
-# Static site: no build step, publish the project folder as-is.
+# Generate js/config.js from Netlify environment variables, then publish the folder.
 [build]
+  command = "sh build-config.sh"
   publish = "."
 
 # Always fetch the latest service worker so updates reach installed apps
